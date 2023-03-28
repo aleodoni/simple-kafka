@@ -1,0 +1,77 @@
+version: '3'
+
+services:
+  zookeeper:
+    image: quay.io/debezium/zookeeper:2.0
+    container_name: zookeeper
+    ports:
+     - 2181:2181
+     - 2888:2888
+     - 3888:3888
+    networks:
+      - app-net
+
+  kafka:
+    image: quay.io/debezium/kafka:2.0
+    container_name: kafka
+    ports:
+     - 9092:9092
+    links:
+     - zookeeper
+    environment:
+     - ZOOKEEPER_CONNECT=zookeeper:2181
+    networks:
+      - app-net
+      
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    ports:
+      - 5433:5432
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./sql/1.extensions.sql:/docker-entrypoint-initdb.d/1.extensions.sql
+      - ./sql/2.schemas.sql:/docker-entrypoint-initdb.d/2.schemas.sql
+      - ./sql/3.tables.sql:/docker-entrypoint-initdb.d/3.tables.sql
+      - ./sql/4.data.sql:/docker-entrypoint-initdb.d/4.data.sql
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_wal_senders=1"
+      - "-c"
+      - "max_replication_slots=1"
+      - "-c"
+      - "log_min_error_statement=fatal"
+      - "-c"
+      - "listen_addresses=*"
+    networks:
+      - app-net
+
+  connect:
+    image: quay.io/debezium/connect:2.0
+    container_name: connect
+    ports:
+     - 8083:8083
+    depends_on:
+     - kafka
+     - postgres
+    environment:
+     - BOOTSTRAP_SERVERS=kafka:9092
+     - GROUP_ID=1
+     - CONFIG_STORAGE_TOPIC=carcontrol_configs
+     - OFFSET_STORAGE_TOPIC=carcontrol_offsets
+     - STATUS_STORAGE_TOPIC=carcontrol_statuses
+    networks:
+      - app-net
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  db_data:  

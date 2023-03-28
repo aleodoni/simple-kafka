@@ -1,0 +1,1 @@
+docker-compose exec postgres env PGOPTIONS="--search_path=carcontrol" bash -c 'psql -U $POSTGRES_USER postgres'
